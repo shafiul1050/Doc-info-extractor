@@ -2,20 +2,18 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 import json
-import os
 
-# ওয়েবসাইটের নাম এবং লেআউট
+# ওয়েবসাইটের নাম এবং লেআউট সেটআপ
 st.set_page_config(page_title="Doc Intel Extractor", layout="centered")
 st.title("📄 ডকুমেন্ট ইনফরমেশন এক্সট্রাক্টর")
 st.write("আপনার OEKO-TEX বা SDL ডকুমেন্টটি (Image) আপলোড করুন।")
 
-# Hugging Face Secrets থেকে API Key নেওয়া
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
-
-if GOOGLE_API_KEY:
+# Streamlit Advanced Settings (Secrets) থেকে API Key নেওয়া
+try:
+    GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
     genai.configure(api_key=GOOGLE_API_KEY)
-else:
-    st.error("দয়া করে Hugging Face Settings-এ আপনার GOOGLE_API_KEY যুক্ত করুন।")
+except Exception:
+    st.error("❌ দয়া করে Streamlit Advanced Settings (Secrets)-এ আপনার GOOGLE_API_KEY যুক্ত করুন।")
 
 # ফাইল আপলোড অপশন
 uploaded_file = st.file_uploader("ডকুমেন্ট আপলোড করুন (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"])
