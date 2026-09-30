@@ -5,111 +5,132 @@ import json
 import pypdfium2 as pdfium
 import io
 
-# ওয়েবসাইটের নাম এবং লেআউট সেটআপ
+# Website Name and Layout Setup
 st.set_page_config(page_title="Doc Intel Extractor", layout="centered")
-st.title("📄 ডকুমেন্ট ইনফরমেশন এক্সট্রাক্টর")
-st.write("আপনার OEKO-TEX বা SDL ডকুমেন্টটি (Image/PDF) আপলোড করুন।")
+st.title("📄 Document Information Extractor")
+st.write("Upload your OEKO-TEX, SDL, or combined document (Image/PDF).")
 
-# Streamlit Advanced Settings (Secrets) থেকে API Key নিয়ে ক্লায়েন্ট তৈরি করা
+# Fetch API Key from Streamlit Advanced Settings (Secrets)
 try:
     GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
     client = genai.Client(api_key=GOOGLE_API_KEY)
 except Exception:
-    st.error("❌ দয়া করে Streamlit Advanced Settings (Secrets)-এ আপনার GOOGLE_API_KEY যুক্ত করুন।")
+    st.error("❌ Please add your GOOGLE_API_KEY in the Streamlit Advanced Settings (Secrets).")
     st.stop()
 
-# ফাইল আপলোড অপশন
-uploaded_file = st.file_uploader("ডকুমেন্ট আপলোড করুন (PNG, JPG, JPEG, PDF)", type=["png", "jpg", "jpeg", "pdf"])
+# File Upload Option
+uploaded_file = st.file_uploader("Upload Document (PNG, JPG, JPEG, PDF)", type=["png", "jpg", "jpeg", "pdf"])
 
 if uploaded_file is not None:
     file_type = uploaded_file.name.split(".")[-1].lower()
-    image = None
+    images_to_process = []
 
     try:
-        # PDF ফাইল প্রসেস করা
+        # Process PDF File (Extracting ALL pages)
         if file_type == "pdf":
             pdf = pdfium.PdfDocument(uploaded_file.read())
-            page = pdf[0] # প্রথম পেজ
-            bitmap = page.render(scale=2)
-            pil_img = bitmap.to_pil()
+            num_pages = len(pdf)
+            st.info(f"📄 Processing a total of {num_pages} page(s) from the PDF...")
             
-            image = pil_img
-            st.image(image, caption='আপলোডকৃত PDF ডকুমেন্টের প্রথম পাতা', use_container_width=True)
+            for page_idx in range(num_pages):
+                page = pdf[page_idx]
+                bitmap = page.render(scale=2)
+                pil_img = bitmap.to_pil()
+                images_to_process.append(pil_img)
+                
+            # Preview the first page for the user
+            st.image(images_to_process[0], caption='Document Preview (Page 1)', use_container_width=True)
         else:
-            # ইমেজ ফাইল প্রসেস করা
+            # Process standard Image file
             image = Image.open(uploaded_file)
-            st.image(image, caption='আপলোডকৃত ডকুমেন্ট', use_container_width=True)
+            images_to_process.append(image)
+            st.image(image, caption='Uploaded Document', use_container_width=True)
             
     except Exception as e:
-        st.error(f"❌ ফাইলটি পড়তে সমস্যা হচ্ছে। ভুল: {e}")
+        st.error(f"❌ Failed to read the file. Error: {e}")
 
-    if image is not None:
-        st.info("💡 তথ্য খোঁজা হচ্ছে... অনুগ্রহ করে অপেক্ষা করুন।")
+    if images_to_process:
+        st.info("💡 Analyzing document pages... Please wait.")
         
+        # Updated prompt to handle single or combined document structures across multiple pages
         prompt = """
-        Analyze this document image and classify whether it is 'OEKO-TEX' or 'SDL'.
-        Then extract the following information strictly in JSON format. Do not include markdown code formatting like ```json.
+        Analyze all the provided images of the document. The document may contain an OEKO-TEX certificate, an SDL certificate, or BOTH combined within the pages.
         
-        If it is OEKO-TEX, extract:
+        Carefully extract all required fields and return the result strictly in valid JSON format. 
+        Do not include markdown code formatting like ```json or ```.
+        
+        Structure your response exactly like this JSON object:
         {
-          "Doc Type": "OEKO-TEX",
-          "Certificate Holder Name": "...",
-          "Certificate Number": "...",
-          "Expire Date": "...",
-          "Certificate Scope": "..."
+          "Document Type": "OEKO-TEX only / SDL only / Combined (OEKO-TEX & SDL)",
+          "OEKO-TEX Details": {
+            "Certificate Holder Name": "...",
+            "Certificate Number": "...",
+            "Expire Date": "...",
+            "Certificate Scope": "..."
+          },
+          "SDL Details": {
+            "Certificate Number/ Holding Oeko-tex number": "...",
+            "Name of the seller": "...",
+            "Issue date": "..."
+          }
         }
         
-        If it is SDL, extract:
-        {
-          "Doc Type": "SDL",
-          "Certificate Number/ Holding Oeko-tex number": "...",
-          "Name of the seller": "...",
-          "Issue date": "..."
-        }
+        Note: If a specific certificate type is not found in the document, fill its fields as "Not Found".
         """
         
-        # প্রথমে প্রধান ৩.৮ মডেল দিয়ে চেষ্টা করবে, জ্যাম থাকলে বিকল্প ৩.৫ মডেলে চলে যাবে
         response = None
+        # Prepare contents array containing the prompt and all page images
+        contents_payload = [prompt] + images_to_process
+        
         try:
-            # ১ম চেষ্টা: Gemini 3.8 Flash
+            # 1st Attempt: Gemini 3.8 Flash
             response = client.models.generate_content(
                 model='gemini-3.8-flash',
-                contents=[prompt, image]
+                contents=contents_payload
             )
         except Exception as e:
             if "503" in str(e) or "UNAVAILABLE" in str(e):
-                st.warning("⚠️ প্রধান সার্ভার ব্যস্ত। বিকল্প ব্যাকআপ সার্ভার ব্যবহার করা হচ্ছে...")
+                st.warning("⚠️ Main server is busy. Swapping to backup server...")
                 try:
-                    # ২য় চেষ্টা: Gemini 3.5 Flash
+                    # 2nd Attempt: Gemini 3.5 Flash Fallback
                     response = client.models.generate_content(
                         model='gemini-3.5-flash',
-                        contents=[prompt, image]
+                        contents=contents_payload
                     )
                 except Exception as fallback_error:
-                    st.error(f"❌ দুঃখিত, গুগলের সব সার্ভার এই মুহূর্তে ওভারলোডেড। ১-২ মিনিট পর আবার চেষ্টা করুন। ভুল: {fallback_error}")
+                    st.error(f"❌ All Google servers are temporarily overloaded. Please try again in 1 minute. Error: {fallback_error}")
             else:
-                st.error(f"❌ একটি ত্রুটি ঘটেছে: {e}")
+                st.error(f"❌ An error occurred: {e}")
                 
-        # রেসপন্স সফল হলে ডাটা প্রিন্ট করবে
+        # Parse and display results if response is successful
         if response is not None:
             try:
-                # টেক্সট পরিষ্কার করা
                 clean_text = response.text.strip()
                 if "```json" in clean_text:
                     clean_text = clean_text.split("```json")[-1].split("```")[0].strip()
                 elif "```" in clean_text:
-                    clean_text = clean_text.split("```")[1].strip()
+                    clean_text = clean_text.split("```")[0].strip()
                     
                 data = json.loads(clean_text)
                 
-                st.success("✅ সফলভাবে তথ্য সংগ্রহ করা হয়েছে!")
-                st.subheader(f"📄 ডকুমেন্টের ধরন: {data.get('Doc Type', 'অজানা')}")
+                st.success("✅ Information successfully extracted!")
+                st.subheader(f"📄 Classification: {data.get('Document Type', 'Unknown')}")
                 
-                for key, value in data.items():
-                    if key != "Doc Type":
+                # Layout for OEKO-TEX details
+                if "OEKO-TEX" in data.get('Document Type', '') or any(v != "Not Found" for v in data.get('OEKO-TEX Details', {}).values()):
+                    st.markdown("### 🔹 OEKO-TEX Certificate Data")
+                    oeko_data = data.get('OEKO-TEX Details', {})
+                    for key, value in oeko_data.items():
                         st.write(f"**{key}**")
-                        # টেক্সটটি কোড ব্লকে দেখানো হচ্ছে যাতে পাশে থাকা কপি বাটনটি স্বয়ংক্রিয়ভাবে চলে আসে
+                        st.code(value, language="text")
+                        
+                # Layout for SDL details
+                if "SDL" in data.get('Document Type', '') or any(v != "Not Found" for v in data.get('SDL Details', {}).values()):
+                    st.markdown("### 🔹 SDL Certificate Data")
+                    sdl_data = data.get('SDL Details', {})
+                    for key, value in sdl_data.items():
+                        st.write(f"**{key}**")
                         st.code(value, language="text")
                         
             except Exception as parse_error:
-                st.error(f"❌ ডাটা প্রসেস করতে সমস্যা হয়েছে। আবার চেষ্টা করুন। ভুল: {parse_error}")
+                st.error(f"❌ Failed to parse data correctly. Please re-upload. Error: {parse_error}")
