@@ -188,4 +188,5 @@ if uploaded_file is not None:
                                 if len(token) == 4:
                                     exp_year = int(token)
                                     break
+                            
                             if not exp_year and date_digits:
