@@ -63,14 +63,13 @@ if uploaded_file is not None:
         response = None
         contents_payload = [prompt] + images_to_process
         
-        # Robust Quota Handler & Active Error Catching Loop
+        # Standard API Quota & Demand traffic handler loop
         def call_gemini_model(model_name):
             try:
                 return client.models.generate_content(model=model_name, contents=contents_payload)
             except Exception as error_msg:
                 err_str = str(error_msg)
-                # Catch either Quota Limits (429) or temporary server demand drops (503/404)
-                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str or "UNAVAILABLE" in err_str:
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str or "UNAVAILABLE" in err_str or "404" in err_str:
                     wait_time = 25
                     match = re.search(r'retry in (\d+)', err_str)
                     if match:
@@ -90,15 +89,16 @@ if uploaded_file is not None:
                     raise error_msg
 
         try:
-            # 1st attempt with the main new generative flash model
+            # Main execution target using Google's active flagship flash endpoint
             response = call_gemini_model('gemini-3.8-flash')
         except Exception as e:
-            st.warning("⚠️ Main server encountered an issue. Swapping to active backup model...")
+            st.warning("⚠️ High demand detected. Re-trying active primary model line with fallback handling...")
             try:
-                # FIXED: Swapped backup target to 'gemini-2.5-flash' which natively integrates with the new google-genai library constraints without path errors
-                response = call_gemini_model('gemini-2.5-flash')
+                # FIXED: Backup targets mapped back to gemini-3.8-flash with delayed quota retry loop to eliminate all 404 model legacy errors
+                time.sleep(5)
+                response = call_gemini_model('gemini-3.8-flash')
             except Exception as fallback_error:
-                st.error(f"❌ All Google servers are temporarily overloaded. Please try again. Error: {fallback_error}")
+                st.error(f"❌ Google servers are temporarily overloaded. Please try again in a few moments. Error: {fallback_error}")
                 
         if response is not None:
             try:
@@ -112,10 +112,18 @@ if uploaded_file is not None:
                 st.success("✅ Information successfully extracted!")
                 st.subheader(f"📄 Classification: {doc_type_display}")
                 
+                extracted_cert_num = "Not Found"
+                extracted_holder_name = "Not Found"
+                extracted_expiry_date = "Not Found"
+                
                 # Show OEKO-TEX data layer
                 if any(v != "Not Found" for v in data.get('OEKO-TEX Details', {}).values()):
                     st.markdown("### 🔹 OEKO-TEX Certificate Data")
                     oeko_data = data.get('OEKO-TEX Details', {})
+                    extracted_cert_num = oeko_data.get("Certificate Number", "Not Found")
+                    extracted_holder_name = oeko_data.get("Certificate Holder Name", "Not Found")
+                    extracted_expiry_date = oeko_data.get("Expire Date", "Not Found")
+                    
                     for key, value in oeko_data.items():
                         st.write(f"**{key}**")
                         if key in ["Certificate Holder Name", "Certificate Number"]:
@@ -127,12 +135,31 @@ if uploaded_file is not None:
                 if any(v != "Not Found" for v in data.get('SDL Details', {}).values()):
                     st.markdown("### 🔹 SDL Certificate Data")
                     sdl_data = data.get('SDL Details', {})
+                    # Fallback capture if it is an SDL structure
+                    if extracted_cert_num == "Not Found":
+                        extracted_cert_num = sdl_data.get("Certificate Number/ Holding Oeko-tex number", "Not Found")
+                    if extracted_holder_name == "Not Found":
+                        extracted_holder_name = sdl_data.get("Name of the seller", "Not Found")
+                    if extracted_expiry_date == "Not Found":
+                        extracted_expiry_date = sdl_data.get("Issue date", "Not Found")
+                        
                     for key, value in sdl_data.items():
                         st.write(f"**{key}**")
                         if key in ["Certificate Number/ Holding Oeko-tex number"]:
                             st.code(str(value).upper(), language="text")
                         else:
                             st.code(value, language="text")
+                
+                # NEW FEATURE: Combined Single-Line Output in Capital Letters with Hyphens and Copy Box
+                st.markdown("---")
+                st.subheader("📋 Quick Single-Line Summary")
+                st.write("Formatted as: `Certificate Number - Holder/Seller Name - Date`")
+                
+                summary_line = f"{str(extracted_cert_num).strip()} - {str(extracted_holder_name).strip()} - {str(extracted_expiry_date).strip()}"
+                summary_uppercase = summary_line.upper()
+                
+                # st.code provides native copy button out of the box
+                st.code(summary_uppercase, language="text")
                 
                 # Official Verification Redirection Panel
                 st.markdown("---")
