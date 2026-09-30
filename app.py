@@ -63,13 +63,13 @@ if uploaded_file is not None:
         response = None
         contents_payload = [prompt] + images_to_process
         
-        # FIXED: Quota Handler & Active Fallback logic with absolute SDK compliance
+        # Robust Quota Handler & Active Error Catching Loop
         def call_gemini_model(model_name):
             try:
                 return client.models.generate_content(model=model_name, contents=contents_payload)
             except Exception as error_msg:
                 err_str = str(error_msg)
-                # Catch Quota Limit (429) or Server Overload (503/404 v1beta traps)
+                # Catch either Quota Limits (429) or temporary server demand drops (503/404)
                 if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str or "UNAVAILABLE" in err_str:
                     wait_time = 25
                     match = re.search(r'retry in (\d+)', err_str)
@@ -78,7 +78,6 @@ if uploaded_file is not None:
                     
                     st.warning(f"⏳ Server is busy or limits reached! Auto-Refresh Handler is waiting {wait_time} seconds to reload...")
                     
-                    # Live UI countdown placeholder
                     countdown_placeholder = st.empty()
                     for seconds_left in range(wait_time, 0, -1):
                         countdown_placeholder.text(f"🔄 Retrying automatically in {seconds_left} seconds...")
@@ -91,13 +90,13 @@ if uploaded_file is not None:
                     raise error_msg
 
         try:
-            # 1st attempt with the new global standard model
+            # 1st attempt with the main new generative flash model
             response = call_gemini_model('gemini-3.8-flash')
         except Exception as e:
             st.warning("⚠️ Main server encountered an issue. Swapping to active backup model...")
             try:
-                # 2nd attempt with universal string naming format without v1beta path conflicts
-                response = call_gemini_model('gemini-1.5-flash')
+                # FIXED: Swapped backup target to 'gemini-2.5-flash' which natively integrates with the new google-genai library constraints without path errors
+                response = call_gemini_model('gemini-2.5-flash')
             except Exception as fallback_error:
                 st.error(f"❌ All Google servers are temporarily overloaded. Please try again. Error: {fallback_error}")
                 
