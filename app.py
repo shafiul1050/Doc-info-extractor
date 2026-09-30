@@ -70,9 +70,9 @@ if uploaded_file is not None:
         """
         
         try:
-            # গুগলের নতুন আপডেটেড লাইব্রেরির নিয়ম অনুযায়ী মডেল কল করা
+            # গুগলের ২০২৬ সালের নতুন আপডেটেড নিয়মে সর্বশেষ gemini-3.8-flash মডেল ব্যবহার করা হয়েছে
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-3.8-flash',
                 contents=[prompt, image]
             )
             
@@ -91,7 +91,7 @@ if uploaded_file is not None:
             for key, value in data.items():
                 if key != "Doc Type":
                     st.write(f"**{key}**")
-                    # টেক্সটটি কোড ব্লকে দেখানো হচ্ছে যাতে পাশে থাকা কপি বাটনে ক্লিক করে কপি করা যায়
+                    # টেক্সটটি কোড ব্লকে দেখানো হচ্ছে যাতে পাশে থাকা কপি বাটনটি স্বয়ংক্রিয়ভাবে চলে আসে
                     st.code(value, language="text")
                     
         except Exception as e:
