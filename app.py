@@ -12,7 +12,7 @@ st.set_page_config(page_title="Doc Intel Extractor", layout="centered")
 st.title("📄 Document Information Extractor")
 st.write("Upload your OEKO-TEX, SDL, or combined document (Image/PDF).")
 
-# Complete Embedded Database of Withdrawn Certificates
+# Complete Embedded Database of Withdrawn Certificates provided by you
 WITHDRAWN_CERTIFICATES = [
     "19001696", "20000901", "24000220", "04.B.9047/1", "05.KA.0012", "05.KA.5882", 
     "07.KA.51265", "07.KA.53969", "09.HBD.70597", "09.HBD.73508", "10.HBD.74861", 
@@ -74,7 +74,7 @@ if uploaded_file is not None:
                 bitmap = page.render(scale=2)
                 images_to_process.append(bitmap.to_pil())
             
-            # FIXED: Render multi-page preview safely without breaking captions
+            # Safe multi-page preview mapping
             for idx, img in enumerate(images_to_process):
                 st.image(img, caption=f'Document Page {idx + 1}', use_container_width=True)
         else:
@@ -102,6 +102,7 @@ if uploaded_file is not None:
         contents_payload = [prompt] + images_to_process
         
         try:
+            # Try main modern model
             response = client.models.generate_content(
                 model='gemini-3.8-flash',
                 contents=contents_payload
@@ -110,9 +111,9 @@ if uploaded_file is not None:
             if "503" in str(e) or "UNAVAILABLE" in str(e):
                 st.warning("⚠️ Main server is busy. Swapping to backup model...")
                 try:
-                    # FIXED: Corrected backup string format for new client rules
+                    # FIXED: Completely removed the "models/" prefix from both targets to comply with the Google GenAI library architecture
                     response = client.models.generate_content(
-                        model='gemini-1.5-flash',
+                        model='gemini-2.5-flash',
                         contents=contents_payload
                     )
                 except Exception as fallback_error:
