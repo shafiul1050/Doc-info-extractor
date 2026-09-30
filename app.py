@@ -75,7 +75,6 @@ try:
 except Exception:
     st.error("❌ Please add your GOOGLE_API_KEY in the Streamlit Advanced Settings (Secrets).")
     st.stop()
-
 # File Upload Option
 uploaded_file = st.file_uploader("Upload Document (PNG, JPG, JPEG, PDF)", type=["png", "jpg", "jpeg", "pdf"])
 
@@ -156,8 +155,9 @@ if uploaded_file is not None:
                 st.error(f"❌ An error occurred: {e}")
                 
         if response is not None:
+            clean_text = response.text.strip().replace("```json", "").replace("```", "")
+            
             try:
-                clean_text = response.text.strip().replace("```json", "").replace("```", "")
                 data = json.loads(clean_text)
                 st.success("✅ Information successfully extracted!")
                 st.subheader(f"📄 Classification: {data.get('Document Type', 'Unknown')}")
@@ -195,10 +195,14 @@ if uploaded_file is not None:
                     
                     if is_withdrawn:
                         st.markdown("<h2 style='color:red; font-weight:bold; margin:0;'>🔴 Withdrawn</h2>", unsafe_allow_html=True)
+                        st.error("Warning: Certificate is listed as withdrawn.")
                     else:
                         st.markdown("<h2 style='color:green; font-weight:bold; margin:0;'>🟢 Verified</h2>", unsafe_allow_html=True)
+                        st.success("Pass: Certificate record is clear.")
                     
-                if check_document_expiry(extracted_oeko_expiry):
-                    st.markdown("⚠️ Expired", unsafe_allow_html=True)
-                except Exception as parse_error:
-                    st.error(f"❌ Failed to parse data correctly. Error: {parse_error}")
+                    if check_document_expiry(extracted_oeko_expiry):
+                        st.markdown("<h3 style='color:orange; font-weight:bold;'>⚠️ Expired</h3>", unsafe_allow_html=True)
+                        st.warning("Warning: This certificate has expired.")
+                            
+            except Exception as parse_error:
+                st.error(f"❌ Failed to parse data correctly. Error: {parse_error}")
