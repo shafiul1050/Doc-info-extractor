@@ -101,36 +101,30 @@ if uploaded_file is not None:
         response = None
         contents_payload = [prompt] + images_to_process
         
-        # Function to process content with quota/traffic error catchers
         def call_gemini_model(model_name):
             try:
                 return client.models.generate_content(model=model_name, contents=contents_payload)
             except Exception as error_msg:
                 err_str = str(error_msg)
-                # Check for 429 Resource Exhausted (Quota limit hit)
                 if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                    # Try to extract standard countdown timeline integer from Google error text
                     wait_time = 30
                     match = re.search(r'retry in (\d+)', err_str)
                     if match:
-                        wait_time = int(match.group(1)) + 2 # Add buffer padding
+                        wait_time = int(match.group(1)) + 2
                     
-                    st.warning(f"⏳ Free usage limits reached! The automated handler is waiting {wait_time} seconds to reload your quota reset...")
+                    st.warning(f"⏳ Free usage limits reached! Waiting {wait_time} seconds to reload your quota...")
                     
-                    # Live Countdown Timer display
                     countdown_placeholder = st.empty()
                     for seconds_left in range(wait_time, 0, -1):
                         countdown_placeholder.text(f"🔄 Retrying automatically in {seconds_left} seconds...")
                         time.sleep(1)
                     countdown_placeholder.empty()
                     
-                    # Auto retry computation loop call after waiting
                     st.info("🔄 Quota refreshed! Processing your document now...")
                     return client.models.generate_content(model=model_name, contents=contents_payload)
                 else:
                     raise error_msg
 
-        # Execution block
         try:
             response = call_gemini_model('gemini-3.8-flash')
         except Exception as e:
@@ -154,7 +148,6 @@ if uploaded_file is not None:
                 extracted_oeko_expiry = "Not Found"
                 extracted_sdl_num = "Not Found"
                 
-                # Show OEKO-TEX data
                 if any(v != "Not Found" for v in data.get('OEKO-TEX Details', {}).values()):
                     st.markdown("### 🔹 OEKO-TEX Certificate Data")
                     oeko_data = data.get('OEKO-TEX Details', {})
@@ -164,7 +157,6 @@ if uploaded_file is not None:
                         st.write(f"**{key}**")
                         st.code(value, language="text")
                         
-                # Show SDL data
                 if any(v != "Not Found" for v in data.get('SDL Details', {}).values()):
                     st.markdown("### 🔹 SDL Certificate Data")
                     sdl_data = data.get('SDL Details', {})
@@ -173,7 +165,6 @@ if uploaded_file is not None:
                         st.write(f"**{key}**")
                         st.code(value, language="text")
                 
-                # Verification Panel Layer
                 st.markdown("---")
                 st.subheader("🔍 Registry Verification Panel")
                 
@@ -184,8 +175,17 @@ if uploaded_file is not None:
                     
                     is_withdrawn = (target_oeko and target_oeko in cleaned_db) or (target_sdl and target_sdl in cleaned_db)
                     
-                    # 1. Withdrawn Status Check
                     if is_withdrawn:
                         st.markdown("<h2 style='color:red; font-weight:bold; margin:0;'>🔴 Withdrawn</h2>", unsafe_allow_html=True)
                     else:
                         st.markdown("<h2 style='color:green; font-weight:bold; margin:0;'>🟢 Verified</h2>", unsafe_allow_html=True)
+                    
+                    if extracted_oeko_expiry and extracted_oeko_expiry != "Not Found":
+                        try:
+                            date_digits = re.findall(r'\d+', extracted_oeko_expiry)
+                            exp_year = None
+                            for token in date_digits:
+                                if len(token) == 4:
+                                    exp_year = int(token)
+                                    break
+                            if not exp_year and date_digits:
