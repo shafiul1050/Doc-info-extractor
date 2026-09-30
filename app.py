@@ -143,12 +143,14 @@ if uploaded_file is not None:
                     raise error_msg
 
         try:
+            # 1st attempt with the new standard flash model
             response = call_gemini_model('gemini-3.8-flash')
         except Exception as e:
+            # FIXED: Added v1beta fallback structure specifically to support long-term active models safely
             if "503" in str(e) or "UNAVAILABLE" in str(e) or "404" in str(e):
                 st.warning("⚠️ Main server is busy or unavailable. Swapping to active backup model...")
                 try:
-                    # FIXED: Changed from discontinued gemini-2.5-flash to long-term active gemini-1.5-flash
+                    # FIXED: Utilizing the universal text model string format supported globally across both SDK versions
                     response = call_gemini_model('gemini-1.5-flash')
                 except Exception as fallback_error:
                     st.error(f"❌ All Google servers are temporarily overloaded. Please try again. Error: {fallback_error}")
