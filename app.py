@@ -155,7 +155,7 @@ if uploaded_file is not None:
                 st.subheader("📋 Quick Single-Line Summary")
                 st.write("Formatted as: `Certificate Number-Holder/Seller Name-Date`")
 
-                summary_line = f"{str(extracted_cert_num).strip()} - {str(extracted_holder_name).strip()} - {extracted_date.strftime('%m.%d.%Y')}"
+                summary_line = f"{str(extracted_cert_num).strip()}-{str(extracted_holder_name).strip()}-EXP.-{extracted_date.strftime('%m.%d.%Y')}"
                 summary_uppercase = summary_line.upper()
                 
                 # st.code provides native copy button out of the box
