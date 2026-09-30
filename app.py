@@ -9,7 +9,7 @@ import re
 import time
 
 # Website Name and Layout Setup
-st.set_page_config(page_title="oeko-tex-sdl Info Extractor", layout="centered")
+st.set_page_config(page_title="Oeko-tex Sdl Info Extractor", layout="centered")
 st.title("📄 OEKO-TEX, SDL Info Extractor")
 st.write("Upload your OEKO-TEX, SDL, or combined document (Image/PDF).")
 
