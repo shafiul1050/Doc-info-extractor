@@ -34,11 +34,11 @@ if uploaded_file is not None:
             
             # ইমেজ ভ্যারিয়েবলে রাখা
             image = pil_img
-            st.image(image, caption='আপলোডকৃত PDF ডকুমেন্টের প্রথম পাতা', use_column_width=True)
+            st.image(image, caption='আপলোডকৃত PDF ডকুমেন্টের প্রথম পাতা', use_container_width=True)
         else:
             # যদি সাধারণ ছবি হয়
             image = Image.open(uploaded_file)
-            st.image(image, caption='আপলোডকৃত ডকুমেন্ট', use_column_width=True)
+            st.image(image, caption='আপলোডকৃত ডকুমেন্ট', use_container_width=True)
             
     except Exception as e:
         st.error(f"❌ ফাইলটি পড়তে সমস্যা হচ্ছে। ভুল: {e}")
@@ -69,14 +69,15 @@ if uploaded_file is not None:
         """
         
         try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            # এখানে মডেলের সঠিক নাম ব্যবহার করা হয়েছে
+            model = genai.GenerativeModel('models/gemini-1.5-flash')
             response = model.generate_content([prompt, image])
             
             # ট্রিম করে শুধু পিওর জেসন টেক্সট নেওয়া
             clean_text = response.text.strip()
-            if clean_text.startswith("```json"):
+            if "```json" in clean_text:
                 clean_text = clean_text.split("```json")[-1].split("```")[0].strip()
-            elif clean_text.startswith("```"):
+            elif "```" in clean_text:
                 clean_text = clean_text.split("```")[1].split("```")[0].strip()
                 
             data = json.loads(clean_text)
