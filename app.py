@@ -63,48 +63,49 @@ if uploaded_file is not None:
         response = None
         contents_payload = [prompt] + images_to_process
         
+        # FIXED: Quota Handler & Active Fallback logic with absolute SDK compliance
         def call_gemini_model(model_name):
             try:
                 return client.models.generate_content(model=model_name, contents=contents_payload)
             except Exception as error_msg:
                 err_str = str(error_msg)
-                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                    wait_time = 30
+                # Catch Quota Limit (429) or Server Overload (503/404 v1beta traps)
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str or "UNAVAILABLE" in err_str:
+                    wait_time = 25
                     match = re.search(r'retry in (\d+)', err_str)
                     if match:
                         wait_time = int(match.group(1)) + 2
                     
-                    st.warning(f"⏳ Free usage limits reached! Waiting {wait_time} seconds to reload your quota...")
+                    st.warning(f"⏳ Server is busy or limits reached! Auto-Refresh Handler is waiting {wait_time} seconds to reload...")
                     
+                    # Live UI countdown placeholder
                     countdown_placeholder = st.empty()
                     for seconds_left in range(wait_time, 0, -1):
                         countdown_placeholder.text(f"🔄 Retrying automatically in {seconds_left} seconds...")
                         time.sleep(1)
                     countdown_placeholder.empty()
                     
-                    st.info("🔄 Quota refreshed! Processing your document now...")
+                    st.info("🔄 Re-trying execution loop now...")
                     return client.models.generate_content(model=model_name, contents=contents_payload)
                 else:
                     raise error_msg
 
         try:
+            # 1st attempt with the new global standard model
             response = call_gemini_model('gemini-3.8-flash')
         except Exception as e:
-            if "503" in str(e) or "UNAVAILABLE" in str(e) or "404" in str(e):
-                st.warning("⚠️ Main server is busy. Swapping to active backup model...")
-                try:
-                    response = call_gemini_model('gemini-1.5-flash')
-                except Exception as fallback_error:
-                    st.error(f"❌ All Google servers are temporarily overloaded. Please try again. Error: {fallback_error}")
-            else:
-                st.error(f"❌ An error occurred: {e}")
+            st.warning("⚠️ Main server encountered an issue. Swapping to active backup model...")
+            try:
+                # 2nd attempt with universal string naming format without v1beta path conflicts
+                response = call_gemini_model('gemini-1.5-flash')
+            except Exception as fallback_error:
+                st.error(f"❌ All Google servers are temporarily overloaded. Please try again. Error: {fallback_error}")
                 
         if response is not None:
             try:
                 clean_text = response.text.strip().replace("```json", "").replace("```", "")
                 data = json.loads(clean_text)
                 
-                # FIXED: Change classification text to OEKO+SDL if combined
                 doc_type_display = data.get('Document Type', 'Unknown')
                 if "Combined" in doc_type_display or ("OEKO" in doc_type_display and "SDL" in doc_type_display):
                     doc_type_display = "OEKO+SDL"
@@ -118,7 +119,6 @@ if uploaded_file is not None:
                     oeko_data = data.get('OEKO-TEX Details', {})
                     for key, value in oeko_data.items():
                         st.write(f"**{key}**")
-                        # FIXED: Convert target structural metadata fields to capital letters dynamically
                         if key in ["Certificate Holder Name", "Certificate Number"]:
                             st.code(str(value).upper(), language="text")
                         else:
@@ -130,17 +130,16 @@ if uploaded_file is not None:
                     sdl_data = data.get('SDL Details', {})
                     for key, value in sdl_data.items():
                         st.write(f"**{key}**")
-                        # FIXED: Convert certificate identity variables to capital letters
                         if key in ["Certificate Number/ Holding Oeko-tex number"]:
                             st.code(str(value).upper(), language="text")
                         else:
                             st.code(value, language="text")
                 
-                # Official Verification Redirection Panel (No button crunch bugs)
+                # Official Verification Redirection Panel
                 st.markdown("---")
                 st.subheader("🌐 Official Verification Registry")
                 st.write("Click the link below to manually verify this label on the official OEKO-TEX database:")
-                st.markdown("[🔗 Verify on Official Website (oeko-tex.com)](https://www.oeko-tex.com/en/detail)", unsafe_allow_html=True)
+                st.markdown("[🔗 Verify on Official Website (oeko-tex.com)](https://oeko-tex.com)", unsafe_allow_html=True)
                             
             except Exception as parse_error:
                 st.error(f"❌ Failed to parse data correctly. Error: {parse_error}")
