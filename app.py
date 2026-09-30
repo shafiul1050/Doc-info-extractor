@@ -6,6 +6,7 @@ import pypdfium2 as pdfium
 import io
 from datetime import datetime
 import re
+import time
 
 # Website Name and Layout Setup
 st.set_page_config(page_title="Doc Intel Extractor", layout="centered")
@@ -74,7 +75,6 @@ if uploaded_file is not None:
                 bitmap = page.render(scale=2)
                 images_to_process.append(bitmap.to_pil())
             
-            # Safe multi-page preview mapping
             for idx, img in enumerate(images_to_process):
                 st.image(img, caption=f'Document Page {idx + 1}', use_container_width=True)
         else:
@@ -101,21 +101,43 @@ if uploaded_file is not None:
         response = None
         contents_payload = [prompt] + images_to_process
         
+        # Function to process content with quota/traffic error catchers
+        def call_gemini_model(model_name):
+            try:
+                return client.models.generate_content(model=model_name, contents=contents_payload)
+            except Exception as error_msg:
+                err_str = str(error_msg)
+                # Check for 429 Resource Exhausted (Quota limit hit)
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    # Try to extract standard countdown timeline integer from Google error text
+                    wait_time = 30
+                    match = re.search(r'retry in (\d+)', err_str)
+                    if match:
+                        wait_time = int(match.group(1)) + 2 # Add buffer padding
+                    
+                    st.warning(f"⏳ Free usage limits reached! The automated handler is waiting {wait_time} seconds to reload your quota reset...")
+                    
+                    # Live Countdown Timer display
+                    countdown_placeholder = st.empty()
+                    for seconds_left in range(wait_time, 0, -1):
+                        countdown_placeholder.text(f"🔄 Retrying automatically in {seconds_left} seconds...")
+                        time.sleep(1)
+                    countdown_placeholder.empty()
+                    
+                    # Auto retry computation loop call after waiting
+                    st.info("🔄 Quota refreshed! Processing your document now...")
+                    return client.models.generate_content(model=model_name, contents=contents_payload)
+                else:
+                    raise error_msg
+
+        # Execution block
         try:
-            # Try main modern model
-            response = client.models.generate_content(
-                model='gemini-3.8-flash',
-                contents=contents_payload
-            )
+            response = call_gemini_model('gemini-3.8-flash')
         except Exception as e:
             if "503" in str(e) or "UNAVAILABLE" in str(e):
                 st.warning("⚠️ Main server is busy. Swapping to backup model...")
                 try:
-                    # FIXED: Completely removed the "models/" prefix from both targets to comply with the Google GenAI library architecture
-                    response = client.models.generate_content(
-                        model='gemini-2.5-flash',
-                        contents=contents_payload
-                    )
+                    response = call_gemini_model('gemini-2.5-flash')
                 except Exception as fallback_error:
                     st.error(f"❌ All Google servers are temporarily overloaded. Please try again. Error: {fallback_error}")
             else:
@@ -167,24 +189,3 @@ if uploaded_file is not None:
                         st.markdown("<h2 style='color:red; font-weight:bold; margin:0;'>🔴 Withdrawn</h2>", unsafe_allow_html=True)
                     else:
                         st.markdown("<h2 style='color:green; font-weight:bold; margin:0;'>🟢 Verified</h2>", unsafe_allow_html=True)
-                    
-                    # 2. Expiry Status Check
-                    if extracted_oeko_expiry and extracted_oeko_expiry != "Not Found":
-                        try:
-                            date_digits = re.findall(r'\d+', extracted_oeko_expiry)
-                            exp_year = None
-                            for token in date_digits:
-                                if len(token) == 4:
-                                    exp_year = int(token)
-                                    break
-                            if not exp_year and date_digits:
-                                exp_year = int("20" + date_digits[-1])
-                                
-                            current_year = datetime.now().year
-                            if exp_year and exp_year < current_year:
-                                st.markdown("<h3 style='color:orange; font-weight:bold;'>⚠️ Expired</h3>", unsafe_allow_html=True)
-                        except Exception:
-                            pass
-                            
-            except Exception as parse_error:
-                st.error(f"❌ Failed to parse data correctly. Error: {parse_error}")
