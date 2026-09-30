@@ -145,19 +145,19 @@ if uploaded_file is not None:
         try:
             response = call_gemini_model('gemini-3.8-flash')
         except Exception as e:
-            if "503" in str(e) or "UNAVAILABLE" in str(e):
-                st.warning("⚠️ Main server is busy. Swapping to backup model...")
+            if "503" in str(e) or "UNAVAILABLE" in str(e) or "404" in str(e):
+                st.warning("⚠️ Main server is busy or unavailable. Swapping to active backup model...")
                 try:
-                    response = call_gemini_model('gemini-2.5-flash')
+                    # FIXED: Changed from discontinued gemini-2.5-flash to long-term active gemini-1.5-flash
+                    response = call_gemini_model('gemini-1.5-flash')
                 except Exception as fallback_error:
                     st.error(f"❌ All Google servers are temporarily overloaded. Please try again. Error: {fallback_error}")
             else:
                 st.error(f"❌ An error occurred: {e}")
                 
         if response is not None:
-            clean_text = response.text.strip().replace("```json", "").replace("```", "")
-            
             try:
+                clean_text = response.text.strip().replace("```json", "").replace("```", "")
                 data = json.loads(clean_text)
                 st.success("✅ Information successfully extracted!")
                 st.subheader(f"📄 Classification: {data.get('Document Type', 'Unknown')}")
