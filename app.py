@@ -12,7 +12,7 @@ st.set_page_config(page_title="Doc Intel Extractor", layout="centered")
 st.title("📄 Document Information Extractor")
 st.write("Upload your OEKO-TEX, SDL, or combined document (Image/PDF).")
 
-# Embedded Database of Withdrawn Certificates provided by you
+# Complete Embedded Database of Withdrawn Certificates
 WITHDRAWN_CERTIFICATES = [
     "19001696", "20000901", "24000220", "04.B.9047/1", "05.KA.0012", "05.KA.5882", 
     "07.KA.51265", "07.KA.53969", "09.HBD.70597", "09.HBD.73508", "10.HBD.74861", 
@@ -73,7 +73,10 @@ if uploaded_file is not None:
                 page = pdf[page_idx]
                 bitmap = page.render(scale=2)
                 images_to_process.append(bitmap.to_pil())
-            st.image(images_to_process, caption='Document Preview', use_container_width=True)
+            
+            # FIXED: Render multi-page preview safely without breaking captions
+            for idx, img in enumerate(images_to_process):
+                st.image(img, caption=f'Document Page {idx + 1}', use_container_width=True)
         else:
             image = Image.open(uploaded_file)
             images_to_process.append(image)
@@ -99,7 +102,6 @@ if uploaded_file is not None:
         contents_payload = [prompt] + images_to_process
         
         try:
-            # Main model try using proper naming convention
             response = client.models.generate_content(
                 model='gemini-3.8-flash',
                 contents=contents_payload
@@ -108,7 +110,7 @@ if uploaded_file is not None:
             if "503" in str(e) or "UNAVAILABLE" in str(e):
                 st.warning("⚠️ Main server is busy. Swapping to backup model...")
                 try:
-                    # Corrected backup model reference for the new SDK syntax
+                    # FIXED: Corrected backup string format for new client rules
                     response = client.models.generate_content(
                         model='gemini-1.5-flash',
                         contents=contents_payload
