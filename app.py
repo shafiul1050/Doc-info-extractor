@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 from PIL import Image
 import json
 import pypdfium2 as pdfium
@@ -10,14 +10,16 @@ st.set_page_config(page_title="Doc Intel Extractor", layout="centered")
 st.title("📄 ডকুমেন্ট ইনফরমেশন এক্সট্রাক্টর")
 st.write("আপনার OEKO-TEX বা SDL ডকুমেন্টটি (Image/PDF) আপলোড করুন।")
 
-# Streamlit Advanced Settings (Secrets) থেকে API Key নেওয়া
+# Streamlit Advanced Settings (Secrets) থেকে API Key নিয়ে ক্লায়েন্ট তৈরি করা
 try:
     GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
-    genai.configure(api_key=GOOGLE_API_KEY)
+    # নতুন গুগল এসডিকে (SDK) অনুযায়ী ক্লায়েন্ট সেটআপ
+    client = genai.Client(api_key=GOOGLE_API_KEY)
 except Exception:
     st.error("❌ দয়া করে Streamlit Advanced Settings (Secrets)-এ আপনার GOOGLE_API_KEY যুক্ত করুন।")
+    st.stop()
 
-# ফাইল আপলোড অপশন (এখন PDF ও সাপোর্ট করবে)
+# ফাইল আপলোড অপশন
 uploaded_file = st.file_uploader("ডকুমেন্ট আপলোড করুন (PNG, JPG, JPEG, PDF)", type=["png", "jpg", "jpeg", "pdf"])
 
 if uploaded_file is not None:
@@ -25,18 +27,17 @@ if uploaded_file is not None:
     image = None
 
     try:
-        # যদি ফাইলটি PDF হয়, তবে তার প্রথম পেজটিকে ছবিতে রূপান্তর করা হবে
+        # PDF ফাইল প্রসেস করা
         if file_type == "pdf":
             pdf = pdfium.PdfDocument(uploaded_file.read())
             page = pdf[0] # প্রথম পেজ
             bitmap = page.render(scale=2)
             pil_img = bitmap.to_pil()
             
-            # ইমেজ ভ্যারিয়েবলে রাখা
             image = pil_img
             st.image(image, caption='আপলোডকৃত PDF ডকুমেন্টের প্রথম পাতা', use_container_width=True)
         else:
-            # যদি সাধারণ ছবি হয়
+            # ইমেজ ফাইল প্রসেস করা
             image = Image.open(uploaded_file)
             st.image(image, caption='আপলোডকৃত ডকুমেন্ট', use_container_width=True)
             
@@ -69,11 +70,13 @@ if uploaded_file is not None:
         """
         
         try:
-            # এখানে মডেলের সঠিক নাম ব্যবহার করা হয়েছে
-            model = genai.GenerativeModel('models/gemini-1.5-flash')
-            response = model.generate_content([prompt, image])
+            # গুগলের নতুন আপডেটেড লাইব্রেরির নিয়ম অনুযায়ী মডেল কল করা
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=[prompt, image]
+            )
             
-            # ট্রিম করে শুধু পিওর জেসন টেক্সট নেওয়া
+            # টেক্সট পরিষ্কার করা
             clean_text = response.text.strip()
             if "```json" in clean_text:
                 clean_text = clean_text.split("```json")[-1].split("```")[0].strip()
@@ -88,7 +91,7 @@ if uploaded_file is not None:
             for key, value in data.items():
                 if key != "Doc Type":
                     st.write(f"**{key}**")
-                    # st.code ব্যবহার করলে স্বয়ংক্রিয়ভাবে ডানপাশে একটি 'Copy' বাটন চলে আসে
+                    # টেক্সটটি কোড ব্লকে দেখানো হচ্ছে যাতে পাশে থাকা কপি বাটনে ক্লিক করে কপি করা যায়
                     st.code(value, language="text")
                     
         except Exception as e:
