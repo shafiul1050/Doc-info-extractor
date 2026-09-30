@@ -50,6 +50,25 @@ def clean_cert_number(cert_str):
         return ""
     return re.sub(r'[\s\-_./]', '', cert_str).lower()
 
+def check_document_expiry(expiry_str):
+    """Safely extracts and verifies if the year is older than current system baseline."""
+    if not expiry_str or expiry_str.lower() == "not found":
+        return False
+    try:
+        date_digits = re.findall(r'\d+', expiry_str)
+        exp_year = None
+        for token in date_digits:
+            if len(token) == 4:
+                exp_year = int(token)
+                break
+        if not exp_year and date_digits:
+            exp_year = int("20" + date_digits[-1])
+        if exp_year and exp_year < datetime.now().year:
+            return True
+    except Exception:
+        pass
+    return False
+
 # Fetch API Key from Streamlit Advanced Settings (Secrets)
 try:
     GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
@@ -177,14 +196,7 @@ if uploaded_file is not None:
                     
                     if is_withdrawn:
                         st.markdown("<h2 style='color:red; font-weight:bold; margin:0;'>🔴 Withdrawn</h2>", unsafe_allow_html=True)
-                    else:
-                        st.markdown("<h2 style='color:green; font-weight:bold; margin:0;'>🟢 Verified</h2>", unsafe_allow_html=True)
-                    
-                    # FIXED: Extracted year parsing rearranged to a single robust flat block with no indent trap
-                    if extracted_oeko_expiry and extracted_oeko_expiry != "Not Found":
-                        date_digits = re.findall(r'\d+', extracted_oeko_expiry)
-                        years = [int(token) for token in date_digits if len(token) == 4]
-                        exp_year = years[0] if years else None
-                        
-                        if not exp_year and date_digits:
-                            exp_year = int("20" + date_digits[-1])
+                        else:st.markdown("🟢 Verified", unsafe_allow_html=True) if check_document_expiry(extracted_oeko_expiry):
+                        st.markdown("⚠️ Expired", unsafe_allow_html=True)
+                        except Exception as parse_error:
+                        st.error(f"❌ Failed to parse data correctly. Error: {parse_error}")
