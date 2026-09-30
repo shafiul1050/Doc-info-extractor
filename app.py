@@ -13,61 +13,6 @@ st.set_page_config(page_title="Doc Intel Extractor", layout="centered")
 st.title("📄 Document Information Extractor")
 st.write("Upload your OEKO-TEX, SDL, or combined document (Image/PDF).")
 
-# Complete Embedded Database of Withdrawn Certificates provided by you
-WITHDRAWN_CERTIFICATES = [
-    "19001696", "20000901", "24000220", "04.B.9047/1", "05.KA.0012", "05.KA.5882", 
-    "07.KA.51265", "07.KA.53969", "09.HBD.70597", "09.HBD.73508", "10.HBD.74861", 
-    "11-22936", "11-27369", "11-28208", "11-28251", "11-28854", "11-30432", 
-    "11-30448", "11-33333", "11-33701", "11-34179", "11-34200", "11-34266", 
-    "11-35533", "11-35536", "11-35881", "11-37139", "11-41447", "11-41536", 
-    "11-43875", "11-45894", "11-48507", "11-51912", "11-54735", "11-54863", 
-    "11-54965", "11-55265", "11-55812", "11-57672", "11-58484", "11-67198", 
-    "14.HBD.40465", "14.HBD.47112", "14.HBD.50663", "14.HBD.50665", "14.HBD.52100", 
-    "14.HBD.53304", "15000343", "15.HBD.58746", "15.HBD.63398", "15.HBD.66317", 
-    "15.HBD.76518", "16000681", "16.HBD.00566", "17000367", "17000547", 
-    "17.HBD.22761", "17.HBD.27981", "18000076", "18000098", "18000100", 
-    "18001314", "18001325", "18001538", "18001875", "19000404", "19001551", 
-    "19.HBD.68131", "20000282", "20000293", "20000934", "20001328", "20001564", 
-    "20001834", "2012BL0022", "2014OK0353", "2014OK0435", "2015OK0322", 
-    "2017OK0295", "2018OK1734", "20205OK1672", "2021OK0328", "20.HBD.19413", 
-    "20.HBD.35380", "20.HBD.35381", "20.HBD.35382", "20.HBD.35384", "20.HBD.38452", 
-    "21000991", "21001194", "21001419", "21001543", "21001936", "21.HBD.60661", 
-    "21.HBD.78200", "21.HBD.78202", "21.HBD.78204", "21.HBD.82262", "22000015", 
-    "22000217", "22000431", "22002411", "22003164", "22003377", "22.HBD.03448", 
-    "22.HBD.45004", "22.HBD.48475", "23000588", "23001118", "23001488", 
-    "23001871", "23002333", "23002513", "23002614", "2311289", "2311290", 
-    "23.HBD.10888", "23.HBD.13692", "23.HBD.26570", "23.HBD.35805", "23.HBD.57286", 
-    "23.HBD.65026", "23.HBD.70122", "24000163", "24.HBD.15289", "24.HBD.43527", 
-    "24.HBD.72834", "24.HBD.83998", "24.HBD.85655", "25001402", "25002841", 
-    "25.HBD.37705", "25.HBD.48366", "25.HBD.49359", "25.HBD.81643", "26.HBD.96579", 
-    "6821CIT", "7180CIT", "7861CIT", "7862CIT", "DH020 223168", "DH020 247438", 
-    "HK003 223667", "HKYO 045400", "ZHGO 061107", "ZHGO 062905", "ZHGO 065484", 
-    "ZHGO 070426", "SH150 263079.1"
-]
-
-def clean_cert_number(cert_str):
-    if not cert_str or cert_str.lower() == "not found":
-        return ""
-    return re.sub(r'[\s\-_./]', '', cert_str).lower()
-
-def check_document_expiry(expiry_str):
-    if not expiry_str or expiry_str.lower() == "not found":
-        return False
-    try:
-        date_digits = re.findall(r'\d+', expiry_str)
-        exp_year = None
-        for token in date_digits:
-            if len(token) == 4:
-                exp_year = int(token)
-                break
-        if not exp_year and date_digits:
-            exp_year = int("20" + date_digits[-1])
-        if exp_year and exp_year < datetime.now().year:
-            return True
-    except Exception:
-        pass
-    return False
-
 # Fetch API Key from Streamlit Advanced Settings (Secrets)
 try:
     GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
@@ -112,7 +57,7 @@ if uploaded_file is not None:
           "OEKO-TEX Details": {"Certificate Holder Name": "...", "Certificate Number": "...", "Expire Date": "...", "Certificate Scope": "..."}, 
           "SDL Details": {"Certificate Number/ Holding Oeko-tex number": "...", "Name of the seller": "...", "Issue date": "..."}
         }
-        Note: Fill fields as "Not Found" if missing.
+        Note: If both OEKO-TEX and SDL details are found, set "Document Type" as "OEKO+SDL". Fill fields as "Not Found" if missing.
         """
         
         response = None
@@ -143,14 +88,11 @@ if uploaded_file is not None:
                     raise error_msg
 
         try:
-            # 1st attempt with the new standard flash model
             response = call_gemini_model('gemini-3.8-flash')
         except Exception as e:
-            # FIXED: Added v1beta fallback structure specifically to support long-term active models safely
             if "503" in str(e) or "UNAVAILABLE" in str(e) or "404" in str(e):
-                st.warning("⚠️ Main server is busy or unavailable. Swapping to active backup model...")
+                st.warning("⚠️ Main server is busy. Swapping to active backup model...")
                 try:
-                    # FIXED: Utilizing the universal text model string format supported globally across both SDK versions
                     response = call_gemini_model('gemini-1.5-flash')
                 except Exception as fallback_error:
                     st.error(f"❌ All Google servers are temporarily overloaded. Please try again. Error: {fallback_error}")
@@ -161,50 +103,44 @@ if uploaded_file is not None:
             try:
                 clean_text = response.text.strip().replace("```json", "").replace("```", "")
                 data = json.loads(clean_text)
+                
+                # FIXED: Change classification text to OEKO+SDL if combined
+                doc_type_display = data.get('Document Type', 'Unknown')
+                if "Combined" in doc_type_display or ("OEKO" in doc_type_display and "SDL" in doc_type_display):
+                    doc_type_display = "OEKO+SDL"
+                    
                 st.success("✅ Information successfully extracted!")
-                st.subheader(f"📄 Classification: {data.get('Document Type', 'Unknown')}")
+                st.subheader(f"📄 Classification: {doc_type_display}")
                 
-                extracted_oeko_num = "Not Found"
-                extracted_oeko_expiry = "Not Found"
-                extracted_sdl_num = "Not Found"
-                
+                # Show OEKO-TEX data layer
                 if any(v != "Not Found" for v in data.get('OEKO-TEX Details', {}).values()):
                     st.markdown("### 🔹 OEKO-TEX Certificate Data")
                     oeko_data = data.get('OEKO-TEX Details', {})
-                    extracted_oeko_num = oeko_data.get("Certificate Number", "Not Found")
-                    extracted_oeko_expiry = oeko_data.get("Expire Date", "Not Found")
                     for key, value in oeko_data.items():
                         st.write(f"**{key}**")
-                        st.code(value, language="text")
+                        # FIXED: Convert target structural metadata fields to capital letters dynamically
+                        if key in ["Certificate Holder Name", "Certificate Number"]:
+                            st.code(str(value).upper(), language="text")
+                        else:
+                            st.code(value, language="text")
                         
+                # Show SDL data layer
                 if any(v != "Not Found" for v in data.get('SDL Details', {}).values()):
                     st.markdown("### 🔹 SDL Certificate Data")
                     sdl_data = data.get('SDL Details', {})
-                    extracted_sdl_num = sdl_data.get("Certificate Number/ Holding Oeko-tex number", "Not Found")
                     for key, value in sdl_data.items():
                         st.write(f"**{key}**")
-                        st.code(value, language="text")
+                        # FIXED: Convert certificate identity variables to capital letters
+                        if key in ["Certificate Number/ Holding Oeko-tex number"]:
+                            st.code(str(value).upper(), language="text")
+                        else:
+                            st.code(value, language="text")
                 
+                # Official Verification Redirection Panel (No button crunch bugs)
                 st.markdown("---")
-                st.subheader("🔍 Registry Verification Panel")
-                
-                if st.button("Verify Certificate", type="primary"):
-                    target_oeko = clean_cert_number(extracted_oeko_num)
-                    target_sdl = clean_cert_number(extracted_sdl_num)
-                    cleaned_db = [clean_cert_number(num) for num in WITHDRAWN_CERTIFICATES]
-                    
-                    is_withdrawn = (target_oeko and target_oeko in cleaned_db) or (target_sdl and target_sdl in cleaned_db)
-                    
-                    if is_withdrawn:
-                        st.markdown("<h2 style='color:red; font-weight:bold; margin:0;'>🔴 Withdrawn</h2>", unsafe_allow_html=True)
-                        st.error("Warning: Certificate is listed as withdrawn.")
-                    else:
-                        st.markdown("<h2 style='color:green; font-weight:bold; margin:0;'>🟢 Verified</h2>", unsafe_allow_html=True)
-                        st.success("Pass: Certificate record is clear.")
-                    
-                    if check_document_expiry(extracted_oeko_expiry):
-                        st.markdown("<h3 style='color:orange; font-weight:bold;'>⚠️ Expired</h3>", unsafe_allow_html=True)
-                        st.warning("Warning: This certificate has expired.")
+                st.subheader("🌐 Official Verification Registry")
+                st.write("Click the link below to manually verify this label on the official OEKO-TEX database:")
+                st.markdown("[🔗 Verify on Official Website (oeko-tex.com)](https://www.oeko-tex.com/en/detail)", unsafe_allow_html=True)
                             
             except Exception as parse_error:
                 st.error(f"❌ Failed to parse data correctly. Error: {parse_error}")
