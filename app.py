@@ -153,9 +153,9 @@ if uploaded_file is not None:
                 # NEW FEATURE: Combined Single-Line Output in Capital Letters with Hyphens and Copy Box
                 st.markdown("---")
                 st.subheader("📋 Quick Single-Line Summary")
-                st.write("Formatted as: `Certificate Number - Holder/Seller Name - Date`")
-                
-                summary_line = f"{str(extracted_cert_num).strip()} - {str(extracted_holder_name).strip()} - {str(extracted_expiry_date).strip()}"
+                st.write("Formatted as: `Certificate Number-Holder/Seller Name-Date`")
+
+                summary_line = f"{str(extracted_cert_num).strip()} - {str(extracted_holder_name).strip()} - {extracted_date.strftime('%m.%d.%Y')}"
                 summary_uppercase = summary_line.upper()
                 
                 # st.code provides native copy button out of the box
