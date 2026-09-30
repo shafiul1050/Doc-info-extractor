@@ -13,7 +13,6 @@ st.write("আপনার OEKO-TEX বা SDL ডকুমেন্টটি (Im
 # Streamlit Advanced Settings (Secrets) থেকে API Key নিয়ে ক্লায়েন্ট তৈরি করা
 try:
     GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
-    # নতুন গুগল এসডিকে (SDK) অনুযায়ী ক্লায়েন্ট সেটআপ
     client = genai.Client(api_key=GOOGLE_API_KEY)
 except Exception:
     st.error("❌ দয়া করে Streamlit Advanced Settings (Secrets)-এ আপনার GOOGLE_API_KEY যুক্ত করুন।")
@@ -69,30 +68,48 @@ if uploaded_file is not None:
         }
         """
         
+        # প্রথমে প্রধান ৩.৮ মডেল দিয়ে চেষ্টা করবে, জ্যাম থাকলে বিকল্প ৩.৫ মডেলে চলে যাবে
+        response = None
         try:
-            # গুগলের ২০২৬ সালের নতুন আপডেটেড নিয়মে সর্বশেষ gemini-3.8-flash মডেল ব্যবহার করা হয়েছে
+            # ১ম চেষ্টা: Gemini 3.8 Flash
             response = client.models.generate_content(
                 model='gemini-3.8-flash',
                 contents=[prompt, image]
             )
-            
-            # টেক্সট পরিষ্কার করা
-            clean_text = response.text.strip()
-            if "```json" in clean_text:
-                clean_text = clean_text.split("```json")[-1].split("```")[0].strip()
-            elif "```" in clean_text:
-                clean_text = clean_text.split("```")[1].split("```")[0].strip()
-                
-            data = json.loads(clean_text)
-            
-            st.success("✅ সফলভাবে তথ্য সংগ্রহ করা হয়েছে!")
-            st.subheader(f"📄 ডকুমেন্টের ধরন: {data.get('Doc Type', 'অজানা')}")
-            
-            for key, value in data.items():
-                if key != "Doc Type":
-                    st.write(f"**{key}**")
-                    # টেক্সটটি কোড ব্লকে দেখানো হচ্ছে যাতে পাশে থাকা কপি বাটনটি স্বয়ংক্রিয়ভাবে চলে আসে
-                    st.code(value, language="text")
-                    
         except Exception as e:
-            st.error(f"❌ দুঃখিত, তথ্য সংগ্রহ করা যায়নি। আবার চেষ্টা করুন। ভুলটি হলো: {e}")
+            if "503" in str(e) or "UNAVAILABLE" in str(e):
+                st.warning("⚠️ প্রধান সার্ভার ব্যস্ত। বিকল্প ব্যাকআপ সার্ভার ব্যবহার করা হচ্ছে...")
+                try:
+                    # ২য় চেষ্টা: Gemini 3.5 Flash
+                    response = client.models.generate_content(
+                        model='gemini-3.5-flash',
+                        contents=[prompt, image]
+                    )
+                except Exception as fallback_error:
+                    st.error(f"❌ দুঃখিত, গুগলের সব সার্ভার এই মুহূর্তে ওভারলোডেড। ১-২ মিনিট পর আবার চেষ্টা করুন। ভুল: {fallback_error}")
+            else:
+                st.error(f"❌ একটি ত্রুটি ঘটেছে: {e}")
+                
+        # রেসপন্স সফল হলে ডাটা প্রিন্ট করবে
+        if response is not None:
+            try:
+                # টেক্সট পরিষ্কার করা
+                clean_text = response.text.strip()
+                if "```json" in clean_text:
+                    clean_text = clean_text.split("```json")[-1].split("```")[0].strip()
+                elif "```" in clean_text:
+                    clean_text = clean_text.split("```")[1].strip()
+                    
+                data = json.loads(clean_text)
+                
+                st.success("✅ সফলভাবে তথ্য সংগ্রহ করা হয়েছে!")
+                st.subheader(f"📄 ডকুমেন্টের ধরন: {data.get('Doc Type', 'অজানা')}")
+                
+                for key, value in data.items():
+                    if key != "Doc Type":
+                        st.write(f"**{key}**")
+                        # টেক্সটটি কোড ব্লকে দেখানো হচ্ছে যাতে পাশে থাকা কপি বাটনটি স্বয়ংক্রিয়ভাবে চলে আসে
+                        st.code(value, language="text")
+                        
+            except Exception as parse_error:
+                st.error(f"❌ ডাটা প্রসেস করতে সমস্যা হয়েছে। আবার চেষ্টা করুন। ভুল: {parse_error}")
