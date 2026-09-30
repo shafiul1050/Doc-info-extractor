@@ -163,9 +163,9 @@ if uploaded_file is not None:
                 
                 # Official Verification Redirection Panel
                 st.markdown("---")
-                st.subheader("🌐 Official Verification Registry")
-                st.write("Click the link below to manually verify this label on the official OEKO-TEX database:")
-                st.markdown("[🔗 Verify on Official Website (oeko-tex.com)](https://www.oeko-tex.com/en/label-check)", unsafe_allow_html=True)
+                st.subheader("🌐 OEKO-TEX Verification")
+                st.write("Click the link below to verify this certificate number on the official OEKO-TEX website:")
+                st.markdown("[🔗 Verify oeko-tex Certificate)](https://www.oeko-tex.com/en/label-check)", unsafe_allow_html=True)
                             
             except Exception as parse_error:
                 st.error(f"❌ Failed to parse data correctly. Error: {parse_error}")
