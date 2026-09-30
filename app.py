@@ -10,7 +10,7 @@ import time
 
 # Website Name and Layout Setup
 st.set_page_config(page_title="Doc Intel Extractor", layout="centered")
-st.title("📄 Document Information Extractor")
+st.title("📄 OEKO-TEX, SDL Info Extractor")
 st.write("Upload your OEKO-TEX, SDL, or combined document (Image/PDF).")
 
 # Fetch API Key from Streamlit Advanced Settings (Secrets)
@@ -70,7 +70,7 @@ if uploaded_file is not None:
             except Exception as error_msg:
                 err_str = str(error_msg)
                 if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "503" in err_str or "UNAVAILABLE" in err_str or "404" in err_str:
-                    wait_time = 25
+                    wait_time = 30
                     match = re.search(r'retry in (\d+)', err_str)
                     if match:
                         wait_time = int(match.group(1)) + 2
